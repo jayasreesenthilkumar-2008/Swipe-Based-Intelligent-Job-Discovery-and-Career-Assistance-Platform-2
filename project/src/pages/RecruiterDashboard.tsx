@@ -9,7 +9,6 @@ import {
   experienceLevelLabels,
   applicationStatusLabels,
   applicationStatusColors,
-  formatSalary,
   timeAgo,
 } from '@/lib/utils';
 import {
@@ -19,7 +18,6 @@ import {
   Users,
   TrendingUp,
   X,
-  Eye,
   Trash2,
   Loader2,
   Inbox,
@@ -30,7 +28,7 @@ interface JobWithStats extends Job {
 }
 
 export default function RecruiterDashboard() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [jobs, setJobs] = useState<JobWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -79,14 +77,19 @@ export default function RecruiterDashboard() {
 
   async function handlePostJob(e: React.FormEvent) {
     e.preventDefault();
+    const recruiterId = profile?.id || session?.user?.id;
+    if (!recruiterId) {
+      alert('User session not found. Please sign in again.');
+      return;
+    }
     setPosting(true);
 
     const skills = skillsRequired.split(',').map((s) => s.trim()).filter(Boolean);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('jobs')
       .insert({
-        recruiter_id: profile?.id,
+        recruiter_id: recruiterId,
         title,
         company,
         company_type: companyType,
@@ -102,6 +105,13 @@ export default function RecruiterDashboard() {
       })
       .select('*')
       .single();
+
+    if (error) {
+      console.error('Job post error:', error);
+      alert(`Failed to post job: ${error.message}`);
+      setPosting(false);
+      return;
+    }
 
     if (data) {
       setJobs((prev) => [{ ...(data as Job), applicant_count: 0 }, ...prev]);

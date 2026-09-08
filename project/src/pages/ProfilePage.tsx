@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import type { Resume } from '@/lib/types';
+import type { Resume, UserRole } from '@/lib/types';
+import { analyzeResumeLocally } from '@/lib/mockData';
 import {
   User,
   Upload,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [location, setLocation] = useState(profile?.location || '');
@@ -44,6 +45,17 @@ export default function ProfilePage() {
     suggestions: string[];
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+  if (!profile) return;
+
+  setFullName(profile.full_name || '');
+  setBio(profile.bio || '');
+  setLocation(profile.location || '');
+  setExperienceYears(profile.experience_years || 0);
+  setEducation(profile.education || '');
+  setSkillsInput((profile.skills || []).join(', '));
+  setPortfolioInput((profile.portfolio_links || []).join(', '));
+}, [profile]);
 
   useEffect(() => {
     async function loadResumes() {
@@ -58,20 +70,36 @@ export default function ProfilePage() {
   }, [profile?.id]);
 
   async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const skills = skillsInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const portfolio = portfolioInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  e.preventDefault();
 
-    await supabase
-      .from('profiles')
-      .update({
+  if (!session?.user?.id) {
+    alert('User session not found. Please sign in again.');
+    return;
+  }
+
+  setSaving(true);
+
+  const skills = skillsInput
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const portfolio = portfolioInput
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const role: UserRole =
+    profile?.role ||
+    (session.user.user_metadata?.role as UserRole) ||
+    'seeker';
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: session.user.id,
+        role,
         full_name: fullName,
         bio,
         location,
@@ -79,14 +107,26 @@ export default function ProfilePage() {
         education,
         skills,
         portfolio_links: portfolio,
-      })
-      .eq('id', profile?.id);
+      },
+      {
+        onConflict: 'id',
+      }
+    );
 
-    await refreshProfile();
+  if (error) {
+    console.error('Profile save error:', error);
+    alert(`Failed to save profile: ${error.message}`);
     setSaving(false);
-    setSavedMsg(true);
-    setTimeout(() => setSavedMsg(false), 2000);
+    return;
   }
+
+  await refreshProfile();
+
+  setSaving(false);
+  setSavedMsg(true);
+
+  setTimeout(() => setSavedMsg(false), 2000);
+}
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -103,7 +143,8 @@ export default function ProfilePage() {
       .upload(filePath, file);
 
     if (uploadError) {
-      setUploadError('Failed to upload file. Please try again.');
+      console.error('Resume upload error:', uploadError);
+      setUploadError(uploadError.message || 'Failed to upload file. Please try again.');
       setUploading(false);
       return;
     }
@@ -133,41 +174,66 @@ export default function ProfilePage() {
       setAnalyzing(newResume.id);
       try {
         const fileText = await file.text();
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-resume`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({
-              resumeId: newResume.id,
-              resumeText: fileText,
-            }),
-          },
-        );
+        let result: { ats_score: number; parsed_skills: string[]; suggestions: string[] } | null = null;
 
-        if (response.ok) {
-          const result = await response.json();
-          if (result.ats_score !== undefined) {
-            setResumes((prev) =>
-              prev.map((r) =>
-                r.id === newResume.id
-                  ? {
-                      ...r,
-                      ats_score: result.ats_score,
-                      parsed_skills: result.parsed_skills,
-                    }
-                  : r,
-              ),
-            );
-            setAnalysisResult(result);
-            await refreshProfile();
+        try {
+          const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-resume`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({
+                resumeId: newResume.id,
+                resumeText: fileText,
+              }),
+            },
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.ats_score !== undefined) {
+              result = data;
+            }
           }
+        } catch {
+          // Edge function unreachable (offline/local mode)
         }
-      } catch {
-        // Analysis failed silently — resume is still uploaded
+
+        // If edge function didn't produce result, use local analyzer
+        if (!result) {
+          result = analyzeResumeLocally(fileText);
+        }
+
+        if (result && result.ats_score !== undefined) {
+          await supabase
+            .from('resumes')
+            .update({
+              ats_score: result.ats_score,
+              parsed_skills: result.parsed_skills,
+            })
+            .eq('id', newResume.id);
+
+          setResumes((prev) =>
+            prev.map((r) =>
+              r.id === newResume.id
+                ? {
+                    ...r,
+                    ats_score: result.ats_score,
+                    parsed_skills: result.parsed_skills,
+                  }
+                : r,
+            ),
+          );
+          setAnalysisResult(result);
+          await refreshProfile();
+        }
+      } catch (err) {
+        console.error('Resume analysis failed:', err);
       }
       setAnalyzing(null);
     }

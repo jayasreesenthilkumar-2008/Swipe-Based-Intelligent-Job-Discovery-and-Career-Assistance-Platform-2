@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { isLocalMode } from '@/lib/supabase';
 import type { UserRole } from '@/lib/types';
 import {
   Briefcase,
@@ -85,6 +86,15 @@ export default function AuthPage() {
             Swipe right on your next opportunity
           </p>
         </div>
+
+        {isLocalMode && (
+          <div className="mb-4 flex justify-center">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Offline / Local Demo Mode Active
+            </span>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
           {/* Mode toggle */}
@@ -227,6 +237,45 @@ export default function AuthPage() {
               {mode === 'signup' ? 'Sign in' : 'Sign up'}
             </button>
           </p>
+
+          {/* Quick Demo Access */}
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide text-center mb-2.5">
+              Quick Demo Access
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  signIn('seeker@demo.com', 'password123');
+                }}
+                className="py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 text-xs text-slate-600 font-medium transition-colors text-center"
+              >
+                Job Seeker
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  signIn('recruiter@demo.com', 'password123');
+                }}
+                className="py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 text-xs text-slate-600 font-medium transition-colors text-center"
+              >
+                Recruiter
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  signIn('admin@demo.com', 'password123');
+                }}
+                className="py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 text-xs text-slate-600 font-medium transition-colors text-center"
+              >
+                Admin
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

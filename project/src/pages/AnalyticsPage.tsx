@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Target,
   Award,
-  Clock,
 } from 'lucide-react';
 
 export default function AnalyticsPage() {
