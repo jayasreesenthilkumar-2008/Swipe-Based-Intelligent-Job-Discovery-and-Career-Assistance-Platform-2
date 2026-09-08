@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { mockSupabase } from './mockClient';
 import type { Profile, UserRole } from './types';
 
 interface AuthContextValue {
@@ -67,8 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message || null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (error.message?.includes('fetch') || error.message?.includes('NetworkError')) {
+          const mockRes = await mockSupabase.auth.signInWithPassword({ email, password });
+          return { error: mockRes.error?.message || null };
+        }
+        return { error: error.message };
+      }
+      return { error: null };
+    } catch {
+      const mockRes = await mockSupabase.auth.signInWithPassword({ email, password });
+      return { error: mockRes.error?.message || null };
+    }
   }
 
   async function signUp(
@@ -77,14 +90,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fullName: string,
     role: UserRole,
   ) {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, role } },
-    });
-    if (error) return { error: error.message };
-
-    return { error: null };
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName, role } },
+      });
+      if (error) {
+        if (error.message?.includes('fetch') || error.message?.includes('NetworkError')) {
+          const mockRes = await mockSupabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName, role } },
+          });
+          return { error: mockRes.error?.message || null };
+        }
+        return { error: error.message };
+      }
+      return { error: null };
+    } catch {
+      const mockRes = await mockSupabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName, role } },
+      });
+      return { error: mockRes.error?.message || null };
+    }
   }
 
   async function signOut() {

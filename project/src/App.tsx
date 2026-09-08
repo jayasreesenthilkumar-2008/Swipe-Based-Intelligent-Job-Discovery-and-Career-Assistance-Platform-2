@@ -13,7 +13,7 @@ import { Sparkles } from 'lucide-react';
 
 function AppContent() {
   const { session, profile, loading } = useAuth();
-  const [view, setView] = useState('discover');
+  const [view, setView] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -34,13 +34,20 @@ function AppContent() {
 
   const role = profile?.role || 'seeker';
 
-  const getDefaultView = () => {
-    if (role === 'recruiter') return 'recruiter';
-    if (role === 'admin') return 'admin';
-    return 'discover';
+  const roleAllowedViews: Record<string, string[]> = {
+    seeker: ['discover', 'applications', 'analytics', 'notifications', 'profile'],
+    recruiter: ['recruiter', 'notifications', 'profile'],
+    admin: ['admin', 'profile'],
   };
 
-  const activeView = view || getDefaultView();
+  const defaultViews: Record<string, string> = {
+    seeker: 'discover',
+    recruiter: 'recruiter',
+    admin: 'admin',
+  };
+
+  const allowedViews = roleAllowedViews[role] || roleAllowedViews.seeker;
+  const activeView = view && allowedViews.includes(view) ? view : (defaultViews[role] || 'discover');
 
   const renderView = () => {
     switch (activeView) {

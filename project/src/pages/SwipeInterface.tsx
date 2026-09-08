@@ -25,7 +25,6 @@ import {
   RotateCcw,
   Info,
   SlidersHorizontal,
-  ChevronDown,
 } from 'lucide-react';
 
 interface SwipeCardProps {
@@ -276,7 +275,7 @@ export default function SwipeInterface() {
       }));
 
       allJobsRef.current = jobsWithScores;
-      setJobs(jobsWithScores);
+      setJobs(jobsWithScores.filter((job) => !swipedSet.has(job.id)));
       setLoading(false);
     }
     loadData();
@@ -355,7 +354,7 @@ export default function SwipeInterface() {
   const activeFilterCount = Object.values(filters).filter((v) => v !== '' && v !== false).length;
 
   function applyFilters() {
-    let filtered = [...allJobsRef.current];
+    let filtered = allJobsRef.current.filter((j) => !swipedIds.has(j.id));
     if (filters.companyType) filtered = filtered.filter((j) => j.company_type === filters.companyType);
     if (filters.jobType) filtered = filtered.filter((j) => j.job_type === filters.jobType);
     if (filters.workMode) filtered = filtered.filter((j) => j.work_mode === filters.workMode);
@@ -370,7 +369,7 @@ export default function SwipeInterface() {
     setFilters({
       companyType: '', jobType: '', workMode: '', experienceLevel: '', skill: '', location: '', sortByMatch: false,
     });
-    setJobs(allJobsRef.current);
+    setJobs(allJobsRef.current.filter((j) => !swipedIds.has(j.id)));
   }
 
   if (loading) {

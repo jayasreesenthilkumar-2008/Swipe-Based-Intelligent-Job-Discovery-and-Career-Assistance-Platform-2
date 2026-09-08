@@ -7,11 +7,9 @@ import {
   applicationStatusColors,
   formatSalary,
   timeAgo,
-  jobTypeLabels,
   workModeLabels,
 } from '@/lib/utils';
 import {
-  LayoutGrid,
   Building2,
   MapPin,
   DollarSign,
